@@ -165,7 +165,7 @@ class CancellationIntegrationTest {
  });}
  private Booking booking(User user,SeatInventory inventory,Station origin,Station destination,int count,HoldReservationType type){
   SeatHold hold=holds.save(new SeatHold(user.getId(),inventory.getTrain(),inventory.getTrainClass(),inventory.getJourneyDate(),inventory.getQuota(),count,inventory,UUID.randomUUID().toString(),Instant.now().plusSeconds(600),type));hold.consume();
-  Booking booking=new Booking(user.getId(),hold,origin,destination,"RY"+UUID.randomUUID().toString().replace("-","").substring(0,24),UUID.randomUUID().toString(),new BigDecimal("1000.00"));
+  Booking booking=new Booking(user.getId(),hold,origin,destination,"RY"+UUID.randomUUID().toString().replace("-","").substring(0,24).toUpperCase(Locale.ROOT),UUID.randomUUID().toString(),new BigDecimal("1000.00"));
   booking.markPaid("PAY"+UUID.randomUUID(),type==HoldReservationType.CONFIRMED?BookingStatus.CONFIRMED:type==HoldReservationType.RAC?BookingStatus.RAC:BookingStatus.WAITLISTED,type==HoldReservationType.CONFIRMED?null:1);
   bookings.saveAndFlush(booking);
   payments.save(new PaymentTransaction(booking,booking.getPaymentReference(),booking.getTotalFare(),com.railyatra.payment.PaymentStatus.SUCCESS,"MOCK",com.railyatra.payment.PaymentMethod.UPI));
