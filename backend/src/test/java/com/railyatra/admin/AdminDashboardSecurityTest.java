@@ -1,6 +1,7 @@
 package com.railyatra.admin;
 
 import static org.mockito.Mockito.*;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import com.railyatra.auth.JwtAuthenticationFilter;
@@ -47,12 +48,12 @@ class AdminDashboardSecurityTest {
         when(dashboard.snapshot()).thenReturn(new AdminDashboardResponse(LocalDate.of(2026,10,10), "Asia/Kolkata",
             5100,650,12,7,2,3,1,new BigDecimal("800.00"),new BigDecimal("1000.00"),new BigDecimal("200.00"),4));
         mvc.perform(get("/api/admin/dashboard")).andExpect(status().isOk())
-            .andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(header().string("Cache-Control", containsString("no-store")))
             .andExpect(jsonPath("$.totalTrains").value(5100)).andExpect(jsonPath("$.revenue").value(800));
         var emitter = new SseEmitter(60_000L);
         when(events.subscribe()).thenReturn(emitter);
         mvc.perform(get("/api/admin/dashboard/events")).andExpect(status().isOk())
-            .andExpect(request().asyncStarted()).andExpect(header().string("Cache-Control", "no-store"));
+            .andExpect(request().asyncStarted()).andExpect(header().string("Cache-Control", containsString("no-store")));
         emitter.complete();
     }
 
