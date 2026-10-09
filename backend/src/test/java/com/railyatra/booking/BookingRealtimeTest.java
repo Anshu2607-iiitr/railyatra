@@ -47,7 +47,8 @@ class BookingRealtimeTest {
 
  @Test void ownerCheckRejectsOtherUsersAndUnauthenticatedSubscribers(){
   BookingRepository repository=mock(BookingRepository.class);BookingPassengerRepository passengers=mock(BookingPassengerRepository.class);
-  when(repository.findByInternalBookingReference("RYPRIVATE")).thenReturn(java.util.Optional.of(eventBooking(7L,"RYPRIVATE")));
+  Booking privateBooking = eventBooking(7L,"RYPRIVATE");
+  when(repository.findByInternalBookingReference("RYPRIVATE")).thenReturn(java.util.Optional.of(privateBooking));
   PnrService pnr=new PnrService(repository,passengers);
   pnr.requireOwner(new AuthPrincipal(7L,"owner@test.local","ROLE_USER"),"ryprivate");
   assertEquals(404,assertThrows(ResponseStatusException.class,()->pnr.requireOwner(new AuthPrincipal(8L,"other@test.local","ROLE_ADMIN"),"RYPRIVATE")).getStatusCode().value());

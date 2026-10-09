@@ -8,6 +8,7 @@ import com.railyatra.railway.domain.SeatInventory;
 import com.railyatra.railway.domain.SeatHold;
 import com.railyatra.railway.domain.SeatType;
 import com.railyatra.railway.repository.SeatAllocationRepository;
+import com.railyatra.railway.repository.SeatRepository;
 import com.railyatra.railway.repository.SeatInventoryRepository;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -22,9 +23,10 @@ public class SeatAllocationService {
     private final SeatInventoryRepository inventories;
     private final SeatAllocationRepository allocations;
     private final AvailabilityService availability;
+    private final SeatRepository seats;
 
-    public SeatAllocationService(SeatInventoryRepository inventories, SeatAllocationRepository allocations, AvailabilityService availability) {
-        this.inventories = inventories; this.allocations = allocations; this.availability = availability;
+    public SeatAllocationService(SeatInventoryRepository inventories, SeatAllocationRepository allocations, AvailabilityService availability, SeatRepository seats) {
+        this.inventories = inventories; this.allocations = allocations; this.availability = availability; this.seats = seats;
     }
 
     /**
@@ -53,7 +55,7 @@ public class SeatAllocationService {
         if (!existing.isEmpty()) return existingResult(inventoryId, allocationReference, existing);
         if (inventory.getAvailableCount() < passengers.size()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Confirmed seats are no longer available");
 
-        List<Seat> freeSeats = new ArrayList<>(allocations.findFreeSeats(inventory.getId(), inventory.getTrainClass().getId()));
+        List<Seat> freeSeats = new ArrayList<>(seats.findFreeSeats(inventory.getId(), inventory.getTrainClass().getId()));
         if (freeSeats.size() < passengers.size()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Seat map is no longer available for all passengers");
         List<SeatAllocation> created = new ArrayList<>();
         for (int index = 0; index < passengers.size(); index++) {
@@ -107,7 +109,7 @@ public class SeatAllocationService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "Held inventory is no longer available"));
         existing = allocations.findByAllocationReferenceOrderByPassengerIndexAsc(allocationReference);
         if (!existing.isEmpty()) return existingResult(inventory.getId(), allocationReference, existing);
-        List<Seat> freeSeats = new ArrayList<>(allocations.findFreeSeats(inventory.getId(), inventory.getTrainClass().getId()));
+        List<Seat> freeSeats = new ArrayList<>(seats.findFreeSeats(inventory.getId(), inventory.getTrainClass().getId()));
         if (freeSeats.size() < passengers.size()) throw new ResponseStatusException(HttpStatus.CONFLICT, "Seat map is no longer available for all passengers");
         List<SeatAllocation> created = new ArrayList<>();
         for (int index = 0; index < passengers.size(); index++) {
