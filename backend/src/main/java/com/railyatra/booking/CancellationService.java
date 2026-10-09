@@ -48,7 +48,8 @@ public class CancellationService {
  @Transactional
  public QuoteResponse confirm(AuthPrincipal user,String reference,String quoteId){
   Booking booking=owned(user,reference);
-  inventories.findByIdForUpdate(booking.getHold().getInventory().getId()).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Inventory missing"));
+  // Refresh while acquiring the write lock: eager associations may have been read before a competing cancellation committed.
+  em.refresh(booking.getHold().getInventory(), jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
   em.refresh(booking); // The booking may have changed while waiting for the inventory lock.
   CancellationQuote quote=quotes.findById(quoteId).filter(q->q.getBooking().getId().equals(booking.getId())).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Cancellation quote not found"));
   List<BookingPassenger> all=passengers.findByBookingIdOrderByPassengerIndexAsc(booking.getId());
