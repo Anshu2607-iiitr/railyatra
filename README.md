@@ -415,3 +415,37 @@ Frontend tests and build pass; Java 21 Docker/Maven verification and live
 integration checks remain pending source upload. See `DEPLOYMENT.md` for the
 cloud secret configuration and required same-origin API proxy.
 
+
+## Verified cloud demo — 10 October 2026
+
+Demo URL: https://railyatra-web-production.up.railway.app
+
+The React frontend runs in its own Nginx service; /api/* is proxied to the Spring Boot backend over verified HTTPS, with streaming buffering disabled for SSE. Vite builds with an empty VITE_API_BASE_URL so authentication cookies and API calls use the frontend origin. React routes support direct navigation. The frontend readiness check calls /api/health through this proxy.
+
+Backend: Java 21 Maven verify passed 51 unit/component tests and 3 integration tests (BookingConcurrencyIT and TrainSearchPerformanceIT); none skipped. This supersedes the earlier local Java 17 verification limitations above. PostgreSQL initialization applied all 20 Flyway migrations. The initial deterministic import took 10.09 seconds: 650 stations, 5,100 trains, 51,089 stops, 5,100 schedules, 10,200 classes, 10,200 coaches, 81,600 static seats and 10,200 fare rules. Date-specific booking inventory remains lazy. Subsequent starts reuse the seed completion marker.
+
+Frontend: 8 tests and the TypeScript/Vite production build passed in the cloud Docker build. Browser interaction verification is unavailable in the disconnected development workspace; use the manual checks below.
+
+Created deployment files: frontend/Dockerfile, frontend/.dockerignore and frontend/nginx/default.conf.template. Changed backend Docker image sources, the SeatRepository/SeatAllocationService entity query, CancellationService inventory refresh under write lock, backend test configuration, test fixtures and Maven Failsafe integration-test execution. No new API or database migration was needed for this deployment.
+
+Railway frontend service configuration:
+- Root directory: /frontend; Dockerfile: Dockerfile; target port: 8080.
+- PORT=8080 and BACKEND_HOST=railyatra-api-production.up.railway.app.
+- Health check: /api/health.
+- Backend CORS allowlist includes the exact frontend HTTPS origin.
+- Database credentials, JWT signing key and demo account passwords are environment variables, never source files.
+
+Windows PowerShell live verification (no local installation required):
+
+```powershell
+$RailYatraDemo = "https://railyatra-web-production.up.railway.app"
+Invoke-RestMethod "$RailYatraDemo/api/health"
+Invoke-RestMethod "$RailYatraDemo/api/stations/search?q=RNC"
+$JourneyDate = (Get-Date).AddDays(2).ToString("yyyy-MM-dd")
+Invoke-RestMethod "$RailYatraDemo/api/trains/search?from=BKSC&to=CNB&date=$JourneyDate&class=ALL&quota=GENERAL&page=0&size=10&sort=departure"
+Start-Process $RailYatraDemo
+```
+
+Manual walkthrough: register or log in; select valid origin/destination and a future journey date; search, view route, choose class, enter passengers and review the server fare; complete the explicitly simulated payment; view the saved confirmation, download PDF, open My Bookings and review cancellation/refund. Admin credentials are supplied separately through the private handoff/environment; the admin page requires ROLE_ADMIN. Test admin create/edit/deactivate with a dedicated development train so existing routes are preserved.
+
+All schedules/fares from the development generator are SYNTHETIC. Mock payments/refunds move no real money. Local-provider references and PDF tickets are internal RailYatra development reservations and are not official Indian Railways/IRCTC tickets.
