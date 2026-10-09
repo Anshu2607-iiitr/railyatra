@@ -1,5 +1,65 @@
+# Complete isolated test configuration; test resources replace the main application.yml.
+spring:
+  application:
+    name: railyatra-api
+  datasource:
+    url: ${RAILYATRA_DB_URL:jdbc:h2:mem:railyatra;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
+    username: ${RAILYATRA_DB_USERNAME:sa}
+    password: ${RAILYATRA_DB_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: ${RAILYATRA_REDIS_HOST:localhost}
+      port: ${RAILYATRA_REDIS_PORT:6379}
+      password: ${RAILYATRA_REDIS_PASSWORD:}
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
 railyatra:
+  cors:
+    allowed-origins: ${RAILYATRA_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  admin:
+    dashboard-poll-ms: ${RAILYATRA_ADMIN_DASHBOARD_POLL_MS:5000}
+  payment-provider: ${RAILYATRA_PAYMENT_PROVIDER:MOCK}
+  status-events:
+    poll-ms: ${RAILYATRA_STATUS_EVENT_POLL_MS:1000}
   auth:
     jwt-secret: test-only-secret-that-is-long-enough-for-hs256-signing
+    access-minutes: ${RAILYATRA_ACCESS_TOKEN_MINUTES:15}
+    refresh-days: ${RAILYATRA_REFRESH_TOKEN_DAYS:14}
+    refresh-cookie-secure: ${RAILYATRA_REFRESH_COOKIE_SECURE:false}
+  inventory:
+    booking-horizon-days: ${RAILYATRA_BOOKING_HORIZON_DAYS:120}
+  holds:
+    duration-seconds: ${RAILYATRA_HOLD_DURATION_SECONDS:600}
+    expiry-check-ms: ${RAILYATRA_HOLD_EXPIRY_CHECK_MS:15000}
+  pnr:
+    lookup-max-per-window: ${RAILYATRA_PNR_LOOKUP_MAX_PER_WINDOW:10}
+    lookup-window-seconds: ${RAILYATRA_PNR_LOOKUP_WINDOW_SECONDS:60}
+  seed:
+    enabled: ${RAILYATRA_SEED_ENABLED:true}
+  cancellation:
+    confirmed-charge: ${RAILYATRA_CANCELLATION_CONFIRMED_CHARGE:60.00}
+    rac-charge: ${RAILYATRA_CANCELLATION_RAC_CHARGE:20.00}
   refunds:
     worker-enabled: false
+    poll-ms: ${RAILYATRA_REFUND_POLL_MS:5000}
+    lease-seconds: ${RAILYATRA_REFUND_LEASE_SECONDS:180}
+    rules:
+      confirmed-charge: ${RAILYATRA_CANCELLATION_CONFIRMED_CHARGE:60.00}
+      rac-charge: ${RAILYATRA_CANCELLATION_RAC_CHARGE:20.00}
+      waitlist-charge: ${RAILYATRA_REFUND_WL_CHARGE:0.00}
+      advance-hours: ${RAILYATRA_REFUND_ADVANCE_HOURS:48}
+      near-hours: ${RAILYATRA_REFUND_NEAR_HOURS:12}
+      intermediate-rate: ${RAILYATRA_REFUND_INTERMEDIATE_RATE:0.25}
+      near-rate: ${RAILYATRA_REFUND_NEAR_RATE:0.50}
+  import:
+    command: ${RAILYATRA_IMPORT_COMMAND:}
+    path: ${RAILYATRA_IMPORT_PATH:}
+    batch-size: ${RAILYATRA_IMPORT_BATCH_SIZE:1000}
