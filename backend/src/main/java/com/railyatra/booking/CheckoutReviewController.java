@@ -1,0 +1,3 @@
+package com.railyatra.booking;
+import com.railyatra.auth.AuthPrincipal; import jakarta.validation.Valid; import org.springframework.security.core.annotation.AuthenticationPrincipal; import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/api/checkout") public class CheckoutReviewController {private final CheckoutReviewService service;public CheckoutReviewController(CheckoutReviewService service){this.service=service;}@PostMapping("/review") public CheckoutReviewResponse review(@AuthenticationPrincipal AuthPrincipal principal,@Valid @RequestBody CheckoutReviewRequest request){return service.review(principal,request);}}

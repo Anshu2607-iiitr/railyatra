@@ -1,0 +1,5 @@
+railyatra:
+  auth:
+    jwt-secret: test-only-secret-that-is-long-enough-for-hs256-signing
+  refunds:
+    worker-enabled: false

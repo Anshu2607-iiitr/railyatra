@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: jdbc:h2:file:./.demo-data/railyatra;MODE=PostgreSQL;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: ${RAILYATRA_DEMO_DB_PASSWORD:}
+server:
+  address: 127.0.0.1
+railyatra:
+  payment-provider: MOCK
+  seed:
+    enabled: true
+  import:
+    command: ""

@@ -1,0 +1,10 @@
+package com.railyatra.railway.realtime;
+
+import java.io.IOException; import java.time.LocalDate; import java.util.Set; import java.util.concurrent.ConcurrentHashMap; import org.springframework.stereotype.Component; import org.springframework.web.servlet.mvc.method.annotation.SseEmitter; import org.springframework.transaction.support.TransactionSynchronization; import org.springframework.transaction.support.TransactionSynchronizationManager;
+@Component public class AvailabilityEventPublisher {
+ private final ConcurrentHashMap<String,Set<SseEmitter>> subscribers=new ConcurrentHashMap<>();
+ public SseEmitter subscribe(String train,LocalDate date,String classCode,String quota){String key=key(train,date,classCode,quota);SseEmitter emitter=new SseEmitter(0L);subscribers.computeIfAbsent(key,ignored->ConcurrentHashMap.newKeySet()).add(emitter);Runnable remove=()->subscribers.getOrDefault(key,Set.of()).remove(emitter);emitter.onCompletion(remove);emitter.onTimeout(remove);try{emitter.send(SseEmitter.event().name("connected").data("refresh"));}catch(IOException ignored){remove.run();}return emitter;}
+ public void publish(String train,LocalDate date,String classCode,String quota,String reason){String key=key(train,date,classCode,quota);AvailabilityEvent event=new AvailabilityEvent(train,date,classCode,quota,reason,java.time.Instant.now());for(SseEmitter emitter:subscribers.getOrDefault(key,Set.of()))try{emitter.send(SseEmitter.event().name("availability-change").data(event));}catch(IOException error){emitter.complete();}}
+ public void publishAfterCommit(String train,LocalDate date,String classCode,String quota,String reason){if(TransactionSynchronizationManager.isSynchronizationActive())TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){@Override public void afterCommit(){publish(train,date,classCode,quota,reason);}});else publish(train,date,classCode,quota,reason);}
+ private String key(String train,LocalDate date,String cls,String quota){return train.toUpperCase()+"|"+date+"|"+cls.toUpperCase()+"|"+quota.toUpperCase().replace(' ','_');}
+}

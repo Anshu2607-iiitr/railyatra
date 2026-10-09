@@ -1,0 +1,25 @@
+package com.railyatra.railway.importer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.Reader; import java.nio.file.*; import java.time.Duration; import java.time.Instant; import java.util.*;
+import org.apache.commons.csv.CSVFormat; import org.apache.commons.csv.CSVRecord;
+import org.springframework.stereotype.Service; import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class DefaultRailwayDataImporter implements RailwayDataImporter {
+  private final ObjectMapper json; private final ImportValidator validator; private final StationImporter stations; private final TrainImporter trains; private final RouteImporter routes; private final ScheduleImporter schedules; private final FareImporter fares; private final RailwayBatchWriter writer;
+  public DefaultRailwayDataImporter(ObjectMapper json,ImportValidator validator,StationImporter stations,TrainImporter trains,RouteImporter routes,ScheduleImporter schedules,FareImporter fares,RailwayBatchWriter writer){this.json=json;this.validator=validator;this.stations=stations;this.trains=trains;this.routes=routes;this.schedules=schedules;this.fares=fares;this.writer=writer;}
+  @Override public ImportReport importData(Path source){try{return importData(Files.isDirectory(source)?readCsvDirectory(source):json.readValue(source.toFile(),RailwayDataSet.class),"IMPORTED");}catch(Exception e){throw new IllegalArgumentException("Unable to read railway import source: "+source,e);}}
+  @Override @Transactional public ImportReport importData(RailwayDataSet data,String dataSource){Instant start=Instant.now();validator.validate(data);stations.importRows(data.stations());trains.importRows(data.trains());routes.importRows(data.stops());schedules.importRows(data.schedules());writer.classes(data.classes());writer.coaches(data.coaches());writer.seats(data.seats());fares.importRows(data.fares());return new ImportReport(dataSource,Duration.between(start,Instant.now()),Map.of("stations",data.stations().size(),"trains",data.trains().size(),"trainStops",data.stops().size(),"schedules",data.schedules().size(),"classes",data.classes().size(),"coaches",data.coaches().size(),"seats",data.seats().size(),"fareRules",data.fares().size()));}
+  private RailwayDataSet readCsvDirectory(Path dir)throws Exception {return new RailwayDataSet(stations(dir),trains(dir),stops(dir),schedules(dir),classes(dir),coaches(dir),seats(dir),fares(dir));}
+  private List<CSVRecord> csv(Path d,String name)throws Exception{try(Reader r=Files.newBufferedReader(d.resolve(name))){return CSVFormat.DEFAULT.builder().setHeader().setSkipHeaderRecord(true).build().parse(r).getRecords();}}
+  private List<RailwayDataSet.StationRow> stations(Path d)throws Exception{return csv(d,"stations.csv").stream().map(r->new RailwayDataSet.StationRow(r.get("stationCode"),r.get("stationName"),r.get("city"),r.get("state"),Optional.ofNullable(r.get("dataSource")).filter(s->!s.isBlank()).orElse("IMPORTED"))).toList();}
+  private List<RailwayDataSet.TrainRow> trains(Path d)throws Exception{return csv(d,"trains.csv").stream().map(r->new RailwayDataSet.TrainRow(r.get("trainNumber"),r.get("trainName"),Optional.ofNullable(r.get("dataSource")).filter(s->!s.isBlank()).orElse("IMPORTED"))).toList();}
+  private List<RailwayDataSet.StopRow> stops(Path d)throws Exception{return csv(d,"train_stops.csv").stream().map(r->new RailwayDataSet.StopRow(r.get("trainNumber"),r.get("stationCode"),Integer.parseInt(r.get("stopSequence")),blank(r,"arrivalTime"),blank(r,"departureTime"),Integer.parseInt(r.get("dayOffset")),Integer.parseInt(r.get("distanceKm")))).toList();}
+  private List<RailwayDataSet.ScheduleRow> schedules(Path d)throws Exception{return csv(d,"schedules.csv").stream().map(r->new RailwayDataSet.ScheduleRow(r.get("trainNumber"),r.get("runsOn"),r.get("effectiveFrom"))).toList();}
+  private List<RailwayDataSet.ClassRow> classes(Path d)throws Exception{return csv(d,"classes.csv").stream().map(r->new RailwayDataSet.ClassRow(r.get("trainNumber"),r.get("classCode"),r.get("className"))).toList();}
+  private List<RailwayDataSet.CoachRow> coaches(Path d)throws Exception{return csv(d,"coaches.csv").stream().map(r->new RailwayDataSet.CoachRow(r.get("trainNumber"),r.get("classCode"),r.get("coachCode"),Integer.parseInt(r.get("coachPosition")))).toList();}
+  private List<RailwayDataSet.SeatRow> seats(Path d)throws Exception{return csv(d,"seats.csv").stream().map(r->new RailwayDataSet.SeatRow(r.get("trainNumber"),r.get("classCode"),r.get("coachCode"),r.get("seatNumber"),r.get("berthType"))).toList();}
+  private List<RailwayDataSet.FareRow> fares(Path d)throws Exception{return csv(d,"fares.csv").stream().map(r->new RailwayDataSet.FareRow(r.get("trainNumber"),r.get("classCode"),r.get("originCode"),r.get("destinationCode"),new java.math.BigDecimal(r.get("baseFare")),new java.math.BigDecimal(r.get("perKmFare")),new java.math.BigDecimal(r.get("minimumFare")))).toList();}
+  private String blank(CSVRecord record,String header){String value=record.get(header);return value==null||value.isBlank()?null:value;}
+}

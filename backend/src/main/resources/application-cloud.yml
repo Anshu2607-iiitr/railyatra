@@ -1,0 +1,14 @@
+# Enable with SPRING_PROFILES_ACTIVE=cloud, or demo,cloud for synthetic demo data.
+# Cloud must follow demo so public binding and PostgreSQL override local H2 settings.
+spring:
+  datasource:
+    url: ${RAILYATRA_DB_URL}
+    username: ${RAILYATRA_DB_USERNAME}
+    password: ${RAILYATRA_DB_PASSWORD}
+server:
+  address: 0.0.0.0
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+railyatra:
+  auth:
+    refresh-cookie-secure: true
