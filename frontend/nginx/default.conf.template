@@ -10,16 +10,16 @@ server {
         return 200 '{"status":"UP","application":"RailYatra Web"}';
     }
 
+    resolver ${DNS_RESOLVER} valid=10s;
+    resolver_timeout 5s;
+
     location /api/ {
-        proxy_pass https://${BACKEND_HOST};
+        set $backend http://${BACKEND_HOST}:${BACKEND_PORT};
+        proxy_pass $backend$request_uri;
         proxy_http_version 1.1;
-        proxy_set_header Host ${BACKEND_HOST};
+        proxy_set_header Host $host;
         proxy_set_header Connection "";
         proxy_set_header X-Forwarded-Proto https;
-        proxy_ssl_server_name on;
-        proxy_ssl_name ${BACKEND_HOST};
-        proxy_ssl_verify on;
-        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 3600s;
