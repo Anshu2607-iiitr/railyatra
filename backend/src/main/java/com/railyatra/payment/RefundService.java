@@ -60,7 +60,8 @@ public class RefundService {
  private Claim claim(String id){
   CancellationQuote initial=quotes.findById(id).orElse(null);if(initial==null||initial.getConfirmedAt()==null)return null;
   PaymentTransaction payment=payments.lockByBookingId(initial.getBooking().getId()).orElse(null);
-  CancellationQuote quote=quotes.lockById(id).orElseThrow();em.refresh(quote);
+  // The quote was loaded before waiting on the payment lock; refresh its version while locking.
+  CancellationQuote quote=initial;em.refresh(quote,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
   boolean eligible="REFUND_PENDING".equals(quote.getRefundStatus())||("REFUND_PROCESSING".equals(quote.getRefundStatus())&&quote.getProcessingAt()!=null&&quote.getProcessingAt().isBefore(Instant.now().minusSeconds(leaseSeconds)));
   if(!eligible)return null;
   if(payment==null){quote.failed("Saved successful payment is missing");publishUpdate(quote.getBooking());return null;}
@@ -73,7 +74,8 @@ public class RefundService {
  private void finish(String id,String token,boolean success,String reason){
   CancellationQuote initial=quotes.findById(id).orElseThrow();
   PaymentTransaction payment=payments.lockByBookingId(initial.getBooking().getId()).orElseThrow();
-  CancellationQuote quote=quotes.lockById(id).orElseThrow();em.refresh(quote);
+  // The quote was loaded before waiting on the payment lock; refresh its version while locking.
+  CancellationQuote quote=initial;em.refresh(quote,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
   if(!"REFUND_PROCESSING".equals(quote.getRefundStatus())||!token.equals(quote.getProcessingToken()))return;
   if(success){payment.recordRefund(quote.getRefund());quote.refunded();}else quote.failed(reason);
   publishUpdate(quote.getBooking());
@@ -81,7 +83,8 @@ public class RefundService {
  public void retry(String id){tx.executeWithoutResult(t->{
   CancellationQuote initial=quotes.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Refund not found"));
   payments.lockByBookingId(initial.getBooking().getId()).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Saved payment is missing"));
-  CancellationQuote quote=quotes.lockById(id).orElseThrow();em.refresh(quote);
+  // The quote was loaded before waiting on the payment lock; refresh its version while locking.
+  CancellationQuote quote=initial;em.refresh(quote,jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
   if(!"REFUND_FAILED".equals(quote.getRefundStatus()))throw new ResponseStatusException(HttpStatus.CONFLICT,"Only failed refunds can be retried");quote.retry();publishUpdate(quote.getBooking());
  });}
  public List<RefundView> history(AuthPrincipal user,String reference){return tx.execute(t->{
