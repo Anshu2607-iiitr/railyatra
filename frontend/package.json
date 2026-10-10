@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --test src/pages/cancellationRules.test.mjs src/realtime/bookingStream.test.mjs src/realtime/adminDashboardStream.test.mjs src/components/routeEditorRules.test.mjs"
+    "test": "node --test src/pages/cancellationRules.test.mjs src/realtime/bookingStream.test.mjs src/realtime/adminDashboardStream.test.mjs src/components/routeEditorRules.test.mjs src/pages/inventoryRules.test.mjs"
   },
   "dependencies": {
     "axios": "^1.7.9",

@@ -494,3 +494,38 @@ Manual verification: sign in as admin, create a dedicated development train with
 Route editor release verification: frontend Docker test/build completed successfully and its proxied health check returned HTTP 200. Backend Java 21 Maven verify passed 53 unit/component tests plus 3 integration tests (56 total, none skipped), including the two new admin API route tests. Both deployed services reached SUCCESS. Browser visual interaction checks remain unavailable because the local execution workspace is disconnected.
 
 Regression fix included: backend/src/main/java/com/railyatra/payment/RefundService.java now refreshes a previously loaded cancellation quote under its pessimistic write lock after acquiring the payment lock. This fixes a stale-version race exposed by the existing concurrent-refund test; claim, finish and retry keep their existing transaction/lease/idempotency behavior.
+
+## Admin seat inventory management
+
+Open Admin → Manage seat inventory. Select train number, journey date, class and quota. Counts are read from persisted inventory, active holds and non-cancelled booking passengers. Inventory initializes lazily within the configured booking horizon. Expired ACTIVE holds remain reserved until the expiry worker releases them; waiting-list checkouts are shown separately because they reserve no confirmed/RAC capacity.
+
+ROLE_ADMIN is enforced at the endpoint and the service checks the current database role. Adjust total confirmed capacity and RAC capacity with a mandatory reason and review before confirmation. Available counts cannot be edited directly. Reductions below existing reservations/holds, increases beyond configured active physical seats, past-date changes and stale revisions are rejected. Capacity increases run the existing deterministic RAC/WL promotion engine. Existing confirmed seat assignments remain intact.
+
+Adjustments use a database row lock, optimistic revision and an Idempotency-Key. The capacity change, promotions and append-only application audit record commit together. Audit history includes actor, timestamp, reason and before/after counts. No audit update/delete API exists. Availability events publish after commit; SSE reconnect and periodic authoritative refetch keep the screen current. Database revision polling also propagates inventory changes between backend instances.
+
+APIs (all admin-only):
+- GET /api/admin/inventory?trainNumber=...&date=YYYY-MM-DD&class=3A&quota=GENERAL
+- POST /api/admin/inventory/{id}/adjustments with Idempotency-Key header and JSON {totalCapacity, racCapacity, expectedVersion, reason}
+- GET /api/admin/inventory/{id}/adjustments?page=0&size=20
+
+Database: Flyway V21 adds inventory_adjustment_audit, its unique retry constraint/history index, and hold/booking lookup indexes. Existing reservations are not rewritten.
+
+Created: backend AdminInventoryController, AdminInventoryService, AdminInventoryResponse, AdminInventoryAdjustment, AdminInventoryServiceTest and V21 migration; frontend AdminInventoryPage.tsx, admin-inventory.css and inventoryRules.js/.d.ts/.test.mjs.
+Changed: SeatInventory, ReservationStatusService, AvailabilityEventPublisher, frontend main.tsx, AdminDashboardPage.tsx, package.json and README.md.
+
+Added seven backend tests covering safe/unsafe adjustment, physical capacity, promotion, idempotency, stale revisions, concurrent admins, rollback/after-commit events and authorization. Added three frontend validation tests.
+
+Run from the repository root in Windows PowerShell:
+```powershell
+Push-Location .\backend
+mvn verify
+Pop-Location
+Push-Location .\frontend
+npm ci
+npm test
+npm run build
+Pop-Location
+powershell -ExecutionPolicy Bypass -File .\start-demo.ps1
+```
+
+Manual verification: sign in as admin, inspect a running train/date/class, adjust capacity with a reason, and inspect audit history. Open the same inventory in a second tab and confirm counts refresh. Attempt to reduce below reserved capacity and verify rejection; submit two adjustments against one revision and verify only one succeeds. Confirm a normal user cannot access these APIs. Use a dedicated development train when testing queue promotion. Browser interaction checks require a connected workspace.

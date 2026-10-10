@@ -63,6 +63,15 @@ public class ReservationStatusService {
         statusEvents.publishAfterCommit(booking);
     }
 
+    /** Admin capacity changes share the reservation lock and the existing deterministic queues. */
+    @Transactional
+    public void promoteAfterInventoryAdjustment(Long inventoryId) {
+        SeatInventory inventory=inventories.findByIdForUpdate(inventoryId).orElseThrow();
+        promote(inventory);
+        reindex(inventory,BookingStatus.RAC);
+        reindex(inventory,BookingStatus.WAITLISTED);
+    }
+
     private void promote(SeatInventory inventory) {
         boolean progressed;
         do {

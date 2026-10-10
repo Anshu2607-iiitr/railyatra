@@ -78,7 +78,7 @@ export function AdminDashboardPage({ apiBaseUrl }: { apiBaseUrl: string }) {
     <div className="admin-heading"><div><p className="admin-eyebrow">RailYatra administration</p><h1 id="admin-title">Operations overview</h1><p>Reservation activity and railway data, directly from the database.</p></div>
       <button className="admin-refresh" onClick={() => setRevision(value => value + 1)} disabled={loading}><RefreshCw size={16} className={loading ? 'admin-refreshing' : ''}/>{loading ? 'Refreshing…' : 'Refresh'}</button>
     </div>
-    <Link to="/admin/trains" className="admin-management-link">Manage trains →</Link>
+    <Link to="/admin/trains" className="admin-management-link">Manage trains →</Link>{' · '}<Link to="/admin/inventory" className="admin-management-link">Manage seat inventory →</Link>
     <div className="admin-connection" role="status"><span className={connection === 'live' ? 'admin-live-dot' : 'admin-offline-dot'}/>{connectionLabels[connection]}{fetchedAt && <span className="admin-fetched">Last fetched {fetchedAt.toLocaleTimeString('en-IN')}</span>}</div>
     {error && <p className="admin-error" role="alert">{error}</p>}
     <div className="admin-grid" aria-busy={loading}>

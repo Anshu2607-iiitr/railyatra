@@ -15,6 +15,7 @@ import { PnrStatusPage } from './pages/PnrStatusPage';
 import { BookingConfirmationPage } from './pages/BookingConfirmationPage';
 import { CancellationPage } from './pages/CancellationPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
+import { AdminInventoryPage } from './pages/AdminInventoryPage';
 import { AdminTrainsPage } from './pages/AdminTrainsPage';
 import { TrainSearchResultsPage } from './pages/TrainSearchResultsPage';
 import './styles.css';
@@ -42,7 +43,7 @@ function Layout() {
       <Route path="/trains" element={<TrainSearchResultsPage apiBaseUrl={apiBase}/>}/>
       <Route path="/pnr" element={<PnrStatusPage apiBaseUrl={apiBase}/>}/>
       <Route path="/login" element={<LoginPage/>}/><Route path="/register" element={<RegisterPage/>}/>
-      <Route element={<ProtectedRoute requiredRole="ROLE_ADMIN"/>}><Route path="/admin" element={<AdminDashboardPage apiBaseUrl={apiBase}/>}/><Route path="/admin/trains" element={<AdminTrainsPage apiBaseUrl={apiBase}/>}/></Route>
+      <Route element={<ProtectedRoute requiredRole="ROLE_ADMIN"/>}><Route path="/admin" element={<AdminDashboardPage apiBaseUrl={apiBase}/>}/><Route path="/admin/trains" element={<AdminTrainsPage apiBaseUrl={apiBase}/>}/><Route path="/admin/inventory" element={<AdminInventoryPage apiBaseUrl={apiBase}/>}/></Route>
       <Route element={<ProtectedRoute/>}>
         <Route path="/account" element={<AccountPage apiBaseUrl={apiBase}/>}/><Route path="/my-bookings" element={<AccountPage apiBaseUrl={apiBase}/>}/>
         <Route path="/book" element={<PassengerBookingPage apiBaseUrl={apiBase}/>}/><Route path="/checkout" element={<CheckoutPage apiBaseUrl={apiBase}/>}/>
