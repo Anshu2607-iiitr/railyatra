@@ -43,7 +43,7 @@ class AdminInventoryServiceTest {
  @Autowired PlatformTransactionManager manager; @Autowired MockMvc mvc;
  @MockitoSpyBean AvailabilityEventPublisher events;
  private Fixture fixture(){return new TransactionTemplate(manager).execute(tx->{
-  String suffix=UUID.randomUUID().toString().replace("-","").substring(0,8);
+  String suffix=UUID.randomUUID().toString().replace("-","").substring(0,8).toUpperCase(Locale.ROOT);
   var user=users.saveAndFlush(new User("Inventory admin","inv"+suffix+"@test.local","I"+suffix,"hash"));
   jdbc.update("update users set role='ROLE_ADMIN' where id=?",user.getId());em.refresh(user);
   var train=trains.save(new Train("I"+suffix,"Inventory test"));
