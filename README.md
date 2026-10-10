@@ -490,3 +490,7 @@ powershell -ExecutionPolicy Bypass -File .\start-demo.ps1
 ```
 
 Manual verification: sign in as admin, create a dedicated development train with four stations, set valid running days/classes and route times/distances, then save. Reopen Edit; move the two intermediate stops, adjust their cumulative distances/times, save and reopen again. Confirm station order, stop numbers, halt and Day 2 times survive reload. Repeat with duplicate station, decreasing distance or arrival before the preceding departure and confirm save is rejected. Check the layout and reorder controls on a mobile-width screen. The local browser workspace is offline; browser visual QA requires a connected browser.
+
+Route editor release verification: frontend Docker test/build completed successfully and its proxied health check returned HTTP 200. Backend Java 21 Maven verify passed 53 unit/component tests plus 3 integration tests (56 total, none skipped), including the two new admin API route tests. Both deployed services reached SUCCESS. Browser visual interaction checks remain unavailable because the local execution workspace is disconnected.
+
+Regression fix included: backend/src/main/java/com/railyatra/payment/RefundService.java now refreshes a previously loaded cancellation quote under its pessimistic write lock after acquiring the payment lock. This fixes a stale-version race exposed by the existing concurrent-refund test; claim, finish and retry keep their existing transaction/lease/idempotency behavior.
