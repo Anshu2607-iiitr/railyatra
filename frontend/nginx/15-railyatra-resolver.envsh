@@ -1,0 +1,13 @@
+#!/bin/sh
+# Sourced by the official Nginx entrypoint before template substitution.
+if [ -z "${DNS_RESOLVER:-}" ]; then
+    DNS_RESOLVER=$(awk '$1 == "nameserver" { print $2; exit }' /etc/resolv.conf)
+fi
+if [ -z "$DNS_RESOLVER" ]; then
+    echo "RailYatra: no runtime DNS resolver configured" >&2
+    exit 1
+fi
+case "$DNS_RESOLVER" in
+    *:*) DNS_RESOLVER="[$DNS_RESOLVER]" ;;
+esac
+export DNS_RESOLVER
