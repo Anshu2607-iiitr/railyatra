@@ -420,7 +420,7 @@ cloud secret configuration and required same-origin API proxy.
 
 Demo URL: https://railyatra-web-production.up.railway.app
 
-The React frontend runs in its own Nginx service; /api/* is proxied to the Spring Boot backend over verified HTTPS, with streaming buffering disabled for SSE. Vite builds with an empty VITE_API_BASE_URL so authentication cookies and API calls use the frontend origin. React routes support direct navigation. The frontend readiness check calls /api/health through this proxy.
+The React frontend runs in its own Nginx service; /api/* is proxied to the Spring Boot backend over Railway's encrypted private network, with streaming buffering disabled for SSE. Vite builds with an empty VITE_API_BASE_URL so authentication cookies and API calls use the frontend origin. React routes support direct navigation. The frontend readiness check calls /api/health through this proxy.
 
 Backend: Java 21 Maven verify passed 51 unit/component tests and 3 integration tests (BookingConcurrencyIT and TrainSearchPerformanceIT); none skipped. This supersedes the earlier local Java 17 verification limitations above. PostgreSQL initialization applied all 20 Flyway migrations. The initial deterministic import took 10.09 seconds: 650 stations, 5,100 trains, 51,089 stops, 5,100 schedules, 10,200 classes, 10,200 coaches, 81,600 static seats and 10,200 fare rules. Date-specific booking inventory remains lazy. Subsequent starts reuse the seed completion marker.
 
@@ -430,7 +430,7 @@ Created deployment files: frontend/Dockerfile, frontend/.dockerignore and fronte
 
 Railway frontend service configuration:
 - Root directory: /frontend; Dockerfile: Dockerfile; target port: 8080.
-- PORT=8080 and BACKEND_HOST=railyatra-api-production.up.railway.app.
+- PORT=8080, BACKEND_HOST=${{railyatra-api.RAILWAY_PRIVATE_DOMAIN}} and BACKEND_PORT=8080. The backend binds SERVER_ADDRESS=:: for private dual-stack access.
 - Health check: /api/health.
 - Backend CORS allowlist includes the exact frontend HTTPS origin.
 - Database credentials, JWT signing key and demo account passwords are environment variables, never source files.
@@ -449,3 +449,9 @@ Start-Process $RailYatraDemo
 Manual walkthrough: register or log in; select valid origin/destination and a future journey date; search, view route, choose class, enter passengers and review the server fare; complete the explicitly simulated payment; view the saved confirmation, download PDF, open My Bookings and review cancellation/refund. Admin credentials are supplied separately through the private handoff/environment; the admin page requires ROLE_ADMIN. Test admin create/edit/deactivate with a dedicated development train so existing routes are preserved.
 
 All schedules/fares from the development generator are SYNTHETIC. Mock payments/refunds move no real money. Local-provider references and PDF tickets are internal RailYatra development reservations and are not official Indian Railways/IRCTC tickets.
+
+### Backend connection fix — 10 October 2026
+
+The public HTTPS upstream was returning 502 because Nginx could not verify its certificate chain. API proxy traffic now uses the environment-isolated Railway private network at railyatra-api.railway.internal:8080; the browser continues to use the same public HTTPS frontend origin. Runtime DNS is read from the container's resolver configuration and re-resolved every 10 seconds so backend redeployments do not leave a stale IP address in Nginx.
+
+Changed frontend/nginx/default.conf.template and frontend/Dockerfile; created frontend/nginx/15-railyatra-resolver.envsh. Backend configuration enables dual-stack binding; frontend environment uses the backend private-domain reference. No API contracts, database migrations, fare logic or booking behavior changed. The frontend Docker build runs all 8 existing tests and the TypeScript/Vite production build. Deployment readiness uses /api/health through the actual frontend proxy.
