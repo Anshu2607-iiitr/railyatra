@@ -45,6 +45,7 @@ class AdminTrainServiceTest {
     @Autowired SeatHoldService holdService;
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
+    @Autowired jakarta.persistence.EntityManager entityManager;
 
     @BeforeEach void stations() {
         stations.save(new Station("ATONE","Admin origin","City","State"));
@@ -133,5 +134,60 @@ class AdminTrainServiceTest {
         mvc.perform(post("/api/admin/trains").with(user("admin").roles("ADMIN")).contentType(MediaType.APPLICATION_JSON).content(body.replace("EXPRESS","UNSUPPORTED")))
             .andExpect(status().isBadRequest());
     }
+
+    @Test void visualRouteReorderPersistsAndReloadsThroughAdminApi() throws Exception {
+        stations.saveAndFlush(new Station("ATEXTRA","Extra stop","City","State"));
+        var initial=request("ROUTE01",null);
+        var route=List.of(
+            new AdminTrainRequest.Stop("ATONE",1,null,LocalTime.of(22,0),0,0),
+            new AdminTrainRequest.Stop("ATMID",2,LocalTime.of(23,0),LocalTime.of(23,5),0,100),
+            new AdminTrainRequest.Stop("ATEXTRA",3,LocalTime.of(0,10),LocalTime.of(0,15),1,200),
+            new AdminTrainRequest.Stop("ATEND",4,LocalTime.of(3,0),null,1,400));
+        var request=new AdminTrainRequest(initial.trainNumber(),initial.name(),initial.type(),initial.source(),initial.destination(),initial.runningDays(),initial.classes(),route,null);
+        String saved=mvc.perform(post("/api/admin/trains").with(user("admin").roles("ADMIN"))
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(request)))
+            .andExpect(status().isCreated()).andExpect(jsonPath("$.stops[2].dayNumber").value(2))
+            .andExpect(jsonPath("$.stops[1].haltMinutes").value(5)).andReturn().getResponse().getContentAsString();
+        long id=json.readTree(saved).get("id").asLong(),version=json.readTree(saved).get("version").asLong();
+        entityManager.flush();entityManager.clear();
+        var reordered=List.of(route.get(0),
+            new AdminTrainRequest.Stop("ATEXTRA",2,LocalTime.of(23,0),LocalTime.of(23,5),0,100),
+            new AdminTrainRequest.Stop("ATMID",3,LocalTime.of(0,10),LocalTime.of(0,15),1,200),route.get(3));
+        var updated=new AdminTrainRequest(initial.trainNumber(),initial.name(),initial.type(),initial.source(),initial.destination(),initial.runningDays(),initial.classes(),reordered,version);
+        mvc.perform(put("/api/admin/trains/"+id).with(user("admin").roles("ADMIN"))
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(updated))).andExpect(status().isOk());
+        entityManager.flush();entityManager.clear();
+        mvc.perform(get("/api/admin/trains/"+id).with(user("admin").roles("ADMIN")))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.source").value("ATONE"))
+            .andExpect(jsonPath("$.destination").value("ATEND"))
+            .andExpect(jsonPath("$.stops[0].stopSequence").value(1))
+            .andExpect(jsonPath("$.stops[1].station.code").value("ATEXTRA"))
+            .andExpect(jsonPath("$.stops[1].stopSequence").value(2))
+            .andExpect(jsonPath("$.stops[2].station.code").value("ATMID"))
+            .andExpect(jsonPath("$.stops[2].dayNumber").value(2))
+            .andExpect(jsonPath("$.stops[2].haltMinutes").value(5))
+            .andExpect(jsonPath("$.stops[3].distanceKm").value(400));
+        mvc.perform(put("/api/admin/trains/"+id).with(user("admin").roles("ADMIN"))
+            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(updated))).andExpect(status().isConflict());
+    }
+
+    @Test void routeApiRejectsEndpointSequenceDistanceAndTimeViolations() throws Exception {
+        var r=request("ROUTEBAD",null);
+        List<List<AdminTrainRequest.Stop>> invalidRoutes=List.of(
+            List.of(new AdminTrainRequest.Stop("ATMID",1,null,LocalTime.of(8,0),0,0),r.stops().get(1),r.stops().get(2)),
+            List.of(r.stops().get(0),r.stops().get(1),new AdminTrainRequest.Stop("ATMID",3,LocalTime.of(14,0),null,0,300)),
+            List.of(r.stops().get(0),new AdminTrainRequest.Stop("ATMID",1,LocalTime.of(10,0),LocalTime.of(10,5),0,100),r.stops().get(2)),
+            List.of(r.stops().get(0),new AdminTrainRequest.Stop("ATMID",2,LocalTime.of(10,0),LocalTime.of(10,5),0,0),r.stops().get(2)),
+            List.of(r.stops().get(0),new AdminTrainRequest.Stop("ATMID",2,LocalTime.of(23,55),LocalTime.of(0,5),0,100),r.stops().get(2)),
+            List.of(r.stops().get(0),new AdminTrainRequest.Stop("ATMID",2,LocalTime.of(10,0),LocalTime.of(10,5),1,100),r.stops().get(2)),
+            List.of(r.stops().get(0),new AdminTrainRequest.Stop("ATMID",2,null,LocalTime.of(10,5),0,100),r.stops().get(2)));
+        for(var route:invalidRoutes) {
+            var invalid=new AdminTrainRequest(r.trainNumber(),r.name(),r.type(),r.source(),r.destination(),r.runningDays(),r.classes(),route,null);
+            mvc.perform(post("/api/admin/trains").with(user("admin").roles("ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(invalid))).andExpect(status().isBadRequest());
+        }
+        assertEquals(0,trains.count());
+    }
+
     private void assertBad(AdminTrainRequest request) { assertEquals(400,assertThrows(ResponseStatusException.class,()->service.create(request)).getStatusCode().value()); }
 }

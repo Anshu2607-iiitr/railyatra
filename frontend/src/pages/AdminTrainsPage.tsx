@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { Plus, Search, ArrowUp, ArrowDown, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { useAuth } from '../auth/AuthProvider';
-import { StationAutocomplete, type Station } from '../components/StationAutocomplete';
+import type { Station } from '../components/StationAutocomplete';
+import { TrainRouteEditor } from '../components/TrainRouteEditor';
+import { routePayload, validateRoute, type EditableStop } from '../components/routeEditorRules';
 import './admin-trains.css';
 
 type Stop = { station: Station; stopSequence: number; arrival: string | null; departure: string | null; dayOffset: number; distanceKm: number };
 type Train = { id: number; trainNumber: string; name: string; type: string; active: boolean; version: number; dataSource: string; source: string; destination: string; runningDays: string[]; classes: string[]; stops: Stop[]; configurationLocked: boolean };
 type Page = { content: Train[]; page: number; totalElements: number; totalPages: number };
 type Options = { types: string[]; runningDays: string[]; classes: { code: string; name: string }[] };
-type EditableStop = { key: string; station: Station | null; arrival: string; departure: string; dayOffset: string; distanceKm: string };
 const label = (text: string) => text.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 function message(error: unknown) {
   if (axios.isAxiosError(error)) {
@@ -38,21 +39,21 @@ function TrainEditor({ train, options, apiBaseUrl, onSaved, onClose }: { train: 
   const [type, setType] = useState(train?.type ?? options.types[0]);
   const [days, setDays] = useState<string[]>(train?.runningDays ?? []);
   const [classes, setClasses] = useState<string[]>(train?.classes ?? []);
-  const [stops, setStops] = useState<EditableStop[]>(train?.stops.length ? train.stops.map(stop => ({ key: crypto.randomUUID(), station: stop.station, arrival: stop.arrival?.slice(0, 5) ?? '', departure: stop.departure?.slice(0, 5) ?? '', dayOffset: String(stop.dayOffset), distanceKm: String(stop.distanceKm) })) : [emptyStop(true), emptyStop(false)]);
+  const [stops, setStops] = useState<EditableStop[]>(train?.stops.length ? train.stops.map(stop => ({ key: crypto.randomUUID(), station: stop.station, arrival: stop.arrival ?? '', departure: stop.departure ?? '', dayOffset: String(stop.dayOffset), distanceKm: String(stop.distanceKm) })) : [emptyStop(true), emptyStop(false)]);
   const [saving, setSaving] = useState(false);
+  const [showRouteValidation, setShowRouteValidation] = useState(false);
   const [error, setError] = useState('');
   const locked = train?.configurationLocked ?? false;
   const toggle = (items: string[], item: string) => items.includes(item) ? items.filter(value => value !== item) : [...items, item];
-  function changeStop(index: number, values: Partial<EditableStop>) { setStops(rows => rows.map((row, i) => i === index ? { ...row, ...values } : row)); }
-  function move(index: number, direction: number) { setStops(rows => { const copy = [...rows]; [copy[index], copy[index + direction]] = [copy[index + direction], copy[index]]; return copy; }); }
   async function save(event: FormEvent) {
-    event.preventDefault(); setError('');
+    event.preventDefault(); setError(''); setShowRouteValidation(true);
     if (!days.length || !classes.length) { setError('Select at least one running day and one class.'); return; }
-    if (stops.some(stop => !stop.station)) { setError('Select a valid station for every route stop.'); return; }
+    const routeIssues = validateRoute(stops);
+    if (routeIssues.length) { setError(`Route needs review: ${routeIssues[0].message}`); return; }
     const codes = stops.map(stop => stop.station!.code);
     if (new Set(codes).size !== codes.length) { setError('Source, destination and intermediate stations must be different.'); return; }
     const payload = { trainNumber: number.trim().toUpperCase(), name: name.trim(), type, source: codes[0], destination: codes[codes.length - 1], runningDays: days, classes, version: train?.version,
-      stops: stops.map((stop, index) => ({ stationCode: stop.station!.code, stopSequence: index + 1, arrival: index === 0 ? null : stop.arrival || null, departure: index === stops.length - 1 ? null : stop.departure || null, dayOffset: Number(stop.dayOffset), distanceKm: Number(stop.distanceKm) })) };
+      stops: routePayload(stops) };
     setSaving(true);
     try {
       const config = { headers: { Authorization: `Bearer ${accessToken}` } };
@@ -73,19 +74,7 @@ function TrainEditor({ train, options, apiBaseUrl, onSaved, onClose }: { train: 
       </fieldset>
       <fieldset disabled={saving || locked} className="train-options"><legend>Running days</legend><div className="train-checkboxes">{options.runningDays.map(day => <label key={day}><input type="checkbox" checked={days.includes(day)} onChange={() => setDays(toggle(days, day))}/>{label(day).slice(0, 3)}</label>)}</div><button type="button" className="train-text-button" onClick={() => setDays(days.length === 7 ? [] : options.runningDays)}>{days.length === 7 ? 'Clear days' : 'Every day'}</button></fieldset>
       <fieldset disabled={saving || locked} className="train-options"><legend>Classes</legend><div className="train-checkboxes">{options.classes.map(cls => <label key={cls.code} title={cls.name}><input type="checkbox" checked={classes.includes(cls.code)} onChange={() => setClasses(toggle(classes, cls.code))}/>{cls.code}</label>)}</div></fieldset>
-      <fieldset disabled={saving || locked} className="train-route-editor"><legend>Ordered route</legend><p className="train-note">First stop is the source; last is the destination. Day offset starts at 0. Times and cumulative distance must increase along the route.</p>
-        {stops.map((stop, index) => <div className="train-stop-editor" key={stop.key}>
-          <div className="train-stop-station"><span className="train-stop-number">{index + 1}</span><StationAutocomplete apiBaseUrl={apiBaseUrl} label={index === 0 ? 'Source station' : index === stops.length - 1 ? 'Destination station' : 'Intermediate station'} selectedStation={stop.station} onSelect={station => changeStop(index, { station })}/></div>
-          <div className="train-stop-times">
-            <label>Arrival<input aria-label={`Stop ${index + 1} arrival`} type="time" required={index > 0} disabled={index === 0} value={stop.arrival} onChange={e => changeStop(index, { arrival: e.target.value })}/></label>
-            <label>Departure<input aria-label={`Stop ${index + 1} departure`} type="time" required={index < stops.length - 1} disabled={index === stops.length - 1} value={stop.departure} onChange={e => changeStop(index, { departure: e.target.value })}/></label>
-            <label>Day offset<input type="number" min="0" max="14" step="1" required readOnly={index === 0} value={stop.dayOffset} onChange={e => changeStop(index, { dayOffset: e.target.value })}/></label>
-            <label>Distance (km)<input type="number" min="0" max="30000" step="1" required readOnly={index === 0} value={stop.distanceKm} onChange={e => changeStop(index, { distanceKm: e.target.value })}/></label>
-          </div>
-          {index > 0 && index < stops.length - 1 && <div className="train-stop-actions"><button type="button" aria-label={`Move stop ${index + 1} up`} disabled={index === 1} onClick={() => move(index, -1)}><ArrowUp size={15}/></button><button type="button" aria-label={`Move stop ${index + 1} down`} disabled={index === stops.length - 2} onClick={() => move(index, 1)}><ArrowDown size={15}/></button><button type="button" onClick={() => setStops(rows => rows.filter((_, i) => i !== index))}>Remove</button></div>}
-        </div>)}
-        <button type="button" className="train-secondary" disabled={stops.length >= 100} onClick={() => setStops(rows => [...rows.slice(0, -1), { ...emptyStop(false), arrival: '', departure: '' }, rows[rows.length - 1]])}><Plus size={16}/> Add intermediate stop</button>
-      </fieldset>
+      <TrainRouteEditor stops={stops} onChange={setStops} apiBaseUrl={apiBaseUrl} disabled={saving || locked} showValidation={showRouteValidation}/>
       {error && <p className="admin-error" role="alert">{error}</p>}
       <div className="train-form-actions"><button type="submit" className="train-primary" disabled={saving}>{saving ? 'Saving…' : train ? 'Save changes' : 'Create train'}</button><button type="button" className="train-secondary" onClick={onClose} disabled={saving}>Cancel</button></div>
     </form>

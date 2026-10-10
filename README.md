@@ -455,3 +455,38 @@ All schedules/fares from the development generator are SYNTHETIC. Mock payments/
 The public HTTPS upstream was returning 502 because Nginx could not verify its certificate chain. API proxy traffic now uses the environment-isolated Railway private network at railyatra-api.railway.internal:8080; the browser continues to use the same public HTTPS frontend origin. Runtime DNS is read from the container's resolver configuration and re-resolved every 10 seconds so backend redeployments do not leave a stale IP address in Nginx.
 
 Changed frontend/nginx/default.conf.template and frontend/Dockerfile; created frontend/nginx/15-railyatra-resolver.envsh. Backend configuration enables dual-stack binding; frontend environment uses the backend private-domain reference. No API contracts, database migrations, fare logic or booking behavior changed. The frontend Docker build runs all 8 existing tests and the TypeScript/Vite production build. Deployment readiness uses /api/health through the actual frontend proxy.
+
+## Visual train route editor
+
+Admin → Manage trains → Create train or Edit opens a responsive vertical route timeline. Each stop shows its station autocomplete, automatically numbered stop position, arrival, departure, calculated halt in minutes, cumulative distance and journey day (Day 1 corresponds to API dayOffset 0). Add stops at any gap, remove intermediate stops, or reorder them using Up/Down and the position selector. Source and destination remain at the ends; their station selections can be edited. Reordering preserves each stop's values and requires invalid distance/time progression to be corrected before saving.
+
+Halt is derived from persisted arrival/departure, avoiding an independent conflicting duration. A stop's arrival and departure currently share one dayOffset; cross-midnight halts at the same station are rejected explicitly. Overnight travel between stations uses increasing journey days. Routes support 2–100 distinct stations, day numbers 1–15, strictly increasing cumulative integer distances (up to 30,000 km) and arrival after the previous departure. Source is Day 1/0 km without arrival; destination has no departure.
+
+Persistence uses existing ROLE_ADMIN endpoints: POST /api/admin/trains, PUT /api/admin/trains/{id}, GET /api/admin/trains/{id}. Admin stop DTOs now additionally return dayNumber and haltMinutes. Sequence numbers remain contiguous from 1. Server-side route validation, transaction/row locking, optimistic revision checks and route locks for existing bookings or active holds remain authoritative. No new database migration or API endpoint is required.
+
+Created:
+- frontend/src/components/TrainRouteEditor.tsx and train-route-editor.css
+- frontend/src/components/routeEditorRules.js, routeEditorRules.d.ts and routeEditorRules.test.mjs
+
+Changed:
+- frontend/src/pages/AdminTrainsPage.tsx and frontend/package.json
+- backend/src/main/java/com/railyatra/admin/AdminTrainResponse.java
+- backend/src/test/java/com/railyatra/admin/AdminTrainServiceTest.java
+- README.md
+
+Validation includes 7 route workflow frontend tests, plus API tests proving reorder persistence after clearing the JPA persistence context, derived day/halt serialization, stale revision rejection and invalid route rejection. Existing admin authorization and booking-protection tests continue to apply.
+
+From the repository root in Windows PowerShell:
+```powershell
+Push-Location .\backend
+mvn verify
+Pop-Location
+Push-Location .\frontend
+npm ci
+npm test
+npm run build
+Pop-Location
+powershell -ExecutionPolicy Bypass -File .\start-demo.ps1
+```
+
+Manual verification: sign in as admin, create a dedicated development train with four stations, set valid running days/classes and route times/distances, then save. Reopen Edit; move the two intermediate stops, adjust their cumulative distances/times, save and reopen again. Confirm station order, stop numbers, halt and Day 2 times survive reload. Repeat with duplicate station, decreasing distance or arrival before the preceding departure and confirm save is rejected. Check the layout and reorder controls on a mobile-width screen. The local browser workspace is offline; browser visual QA requires a connected browser.
